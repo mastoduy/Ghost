@@ -5,13 +5,14 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import articleBodyStyles from '../articleBodyStyles';
 import getUsername from '../../utils/get-username';
 import {OptionProps, SingleValueProps, components} from 'react-select';
+import {Popover, PopoverContent, PopoverTrigger, Skeleton} from '@tryghost/shade';
 
 import {Activity, ActorProperties, ObjectProperties} from '@tryghost/admin-x-framework/api/activitypub';
-import {Button, Icon, LoadingIndicator, Modal, Popover, Select, SelectOption} from '@tryghost/admin-x-design-system';
+import {Button, Icon, LoadingIndicator, Modal, Select, SelectOption} from '@tryghost/admin-x-design-system';
 import {renderTimestamp} from '../../utils/render-timestamp';
 import {useBrowseSite} from '@tryghost/admin-x-framework/api/site';
 import {useModal} from '@ebay/nice-modal-react';
-import {useThreadForUser} from '../../hooks/useActivityPubQueries';
+import {useThreadForUser} from '@hooks/use-activity-pub-queries';
 
 import APAvatar from '../global/APAvatar';
 import APReplyBox from '../global/APReplyBox';
@@ -37,6 +38,8 @@ interface ArticleModalProps {
 interface IframeWindow extends Window {
     resizeIframe?: () => void;
 }
+
+const FONT_SANS = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif';
 
 const ArticleBody: React.FC<{
     heading: string;
@@ -66,18 +69,19 @@ const ArticleBody: React.FC<{
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [iframeHeight, setIframeHeight] = useState('0px');
+    const darkMode = document.documentElement.classList.contains('dark');
 
     const cssContent = articleBodyStyles(siteData?.url.replace(/\/$/, ''));
 
     const htmlContent = `
-        <html>
+        <html class="has-${!darkMode ? 'dark' : 'light'}-text">
         <head>
             ${cssContent}
             <style>
                 :root {
                     --font-size: ${fontSize};
                     --line-height: ${lineHeight};
-                    --font-family: ${fontFamily.value};
+                    --font-family: ${(fontFamily.value === 'sans-serif' ? FONT_SANS : fontFamily.value)};
                     --letter-spacing: ${fontFamily.label === 'Clean sans-serif' ? '-0.013em' : '0'};
                     --content-spacing-factor: ${SPACING_FACTORS[FONT_SIZES.indexOf(fontSize)]};
                 }
@@ -279,8 +283,14 @@ const ArticleBody: React.FC<{
         <div className='w-full pb-6'>
             <div className='relative'>
                 {isLoading && (
-                    <div className='absolute inset-0 flex items-center justify-center bg-white/60'>
-                        <LoadingIndicator />
+                    <div className='mt-6'>
+                        <div className='mb-6 flex flex-col gap-2'>
+                            <Skeleton className='h-8' />
+                            <Skeleton className='h-8 w-full max-w-md' />
+                        </div>
+                        <Skeleton className='mt-2 h-4' count={4} randomize={true} />
+                        <Skeleton className='mt-8 h-[400px]' />
+                        <Skeleton className='mt-2 h-4' containerClassName='block mt-7 mb-4' count={8} randomize={true} />
                     </div>
                 )}
                 <iframe
@@ -302,7 +312,7 @@ const ArticleBody: React.FC<{
 };
 
 const FeedItemDivider: React.FC = () => (
-    <div className="h-px bg-gray-200"></div>
+    <div className="h-px bg-gray-200 dark:bg-gray-950"></div>
 );
 
 const FONT_SIZES = ['1.5rem', '1.6rem', '1.7rem', '1.8rem', '2rem'] as const;
@@ -369,13 +379,14 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
     const [isFocused] = useState(focusReply ? 1 : 0);
 
     const {threadQuery, addToThread} = useThreadForUser('index', activityId);
-    const {data: activityThread, isLoading: isLoadingThread} = threadQuery;
-    const activtyThreadActivityIdx = (activityThread?.items ?? []).findIndex(item => item.object.id === activityId);
-    const activityThreadChildren = (activityThread?.items ?? []).slice(activtyThreadActivityIdx + 1);
-    const activityThreadParents = (activityThread?.items ?? []).slice(0, activtyThreadActivityIdx);
+    const {data: thread, isLoading: isLoadingThread} = threadQuery;
+    const threadPostIdx = (thread?.posts ?? []).findIndex(item => item.object.id === activityId);
+    const threadChildren = (thread?.posts ?? []).slice(threadPostIdx + 1);
+    const threadParents = (thread?.posts ?? []).slice(0, threadPostIdx);
 
     const modalSize = width === 'narrow' ? MODAL_SIZE_SM : MODAL_SIZE_LG;
     const modal = useModal();
+    const darkMode = document.documentElement.classList.contains('dark');
 
     const canNavigateBack = history.length > 0;
     const navigateBack = () => {
@@ -480,7 +491,7 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
     const [fontFamily, setFontFamily] = useState<SelectOption>(() => {
         const saved = localStorage.getItem(STORAGE_KEYS.FONT_FAMILY);
         return saved ? JSON.parse(saved) : {
-            value: 'sans-serif',
+            value: FONT_SANS,
             label: 'Clean sans-serif'
         };
     });
@@ -692,7 +703,7 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
             align='right'
             allowBackgroundInteraction={false}
             animate={true}
-            backDrop={false}
+            backDrop={darkMode && width === 'narrow'}
             backDropClick={true}
             footer={<></>}
             height={'full'}
@@ -702,14 +713,14 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
             width={modalSize === MODAL_SIZE_LG ? 'toSidebar' : modalSize}
         >
             <div className='flex h-full flex-col'>
-                <div className='sticky top-0 z-50 flex h-[97px] items-center justify-center border-b border-gray-200 bg-white'>
+                <div className='sticky top-0 z-50 flex h-[102px] items-center justify-center border-b border-gray-200 bg-white dark:border-gray-950 dark:bg-black'>
                     <div
                         className={`w-full ${modalSize === MODAL_SIZE_LG ? 'grid px-8' : 'flex justify-between gap-2 px-8'}`}
                         style={modalSize === MODAL_SIZE_LG ? {
                             gridTemplateColumns: `1fr minmax(0,${currentGridWidth}) 1fr`
                         } : undefined}
                     >
-                        {(canNavigateBack || (activityThreadParents.length > 0)) ? (
+                        {(canNavigateBack || (threadParents.length > 0)) ? (
                             <div className='col-[1/2] flex items-center justify-between'>
                                 <Button className='transition-color flex h-10 w-10 items-center justify-center rounded-full bg-white hover:bg-gray-100' icon='arrow-left' size='sm' unstyled onClick={navigateBack}/>
                             </div>
@@ -728,104 +739,109 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
                             </div>
                         </div>)}
                         <div className='col-[3/4] flex items-center justify-end gap-2'>
-                            {modalSize === MODAL_SIZE_LG && object.type === 'Article' && <Popover position='end' trigger={ <Button className='transition-color flex h-10 w-10 items-center justify-center rounded-full bg-white hover:bg-gray-100' icon='typography' size='sm' unstyled onClick={() => {}}/>
-                            }>
-                                <div className='flex min-w-[300px] flex-col p-5'>
-                                    <Select
-                                        className='mb-3'
-                                        components={{Option, SingleValue}}
-                                        controlClasses={{control: '!min-h-[40px] !py-0 !pl-1', option: '!pl-1 !py-[4px]'}}
-                                        options={[
-                                            {
-                                                value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
+                            {modalSize === MODAL_SIZE_LG && object.type === 'Article' && <Popover modal={false}>
+                                <PopoverTrigger asChild>
+                                    <Button className='transition-color flex h-10 w-10 items-center justify-center rounded-full bg-white hover:bg-gray-100 dark:bg-black dark:hover:bg-gray-950' icon='typography' size='sm' unstyled />
+                                </PopoverTrigger>
+                                <PopoverContent align='end' className='w-[300px]' onCloseAutoFocus={e => e.preventDefault()} onOpenAutoFocus={e => e.preventDefault()}>
+                                    <div className='flex flex-col'>
+                                        <Select
+                                            className='mb-3'
+                                            components={{Option, SingleValue}}
+                                            controlClasses={{control: '!min-h-[40px] !py-0 !pl-1 dark:!bg-grey-925', option: '!pl-1 !py-[4px]'}}
+                                            options={[
+                                                {
+                                                    value: FONT_SANS,
+                                                    label: 'Clean sans-serif',
+                                                    className: 'font-sans'
+                                                },
+                                                {
+                                                    value: 'Georgia, Times, serif',
+                                                    label: 'Elegant serif',
+                                                    className: 'font-serif'
+                                                }
+                                            ]}
+                                            title='Typeface'
+                                            value={fontFamily}
+                                            onFocus={() => {}}
+                                            onSelect={option => setFontFamily(option || {
+                                                value: FONT_SANS,
                                                 label: 'Clean sans-serif',
                                                 className: 'font-sans'
-                                            },
-                                            {
-                                                value: 'Georgia, Times, serif',
-                                                label: 'Elegant serif',
-                                                className: 'font-serif'
-                                            }
-                                        ]}
-                                        title='Typeface'
-                                        value={fontFamily}
-                                        onSelect={option => setFontFamily(option || {
-                                            value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
-                                            label: 'Clean sans-serif',
-                                            className: 'font-sans'
-                                        })}
-                                    />
-                                    <div className='mb-2 flex items-center justify-between'>
-                                        <span className='text-sm font-medium text-gray-900'>Font size</span>
-                                        <div className='flex items-center'>
-                                            <Button
-                                                className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white ${currentFontSizeIndex === 0 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
-                                                disabled={currentFontSizeIndex === 0}
-                                                hideLabel={true}
-                                                icon='substract'
-                                                iconSize='xs'
-                                                label='Decrease font size'
-                                                unstyled={true}
-                                                onClick={decreaseFontSize}
-                                            />
-                                            <Button
-                                                className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-gray-100 ${currentFontSizeIndex === FONT_SIZES.length - 1 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
-                                                disabled={currentFontSizeIndex === FONT_SIZES.length - 1}
-                                                hideLabel={true}
-                                                icon='add'
-                                                iconSize='xs'
-                                                label='Increase font size'
-                                                unstyled={true}
-                                                onClick={increaseFontSize}
-                                            />
+                                            })}
+                                        />
+                                        <div className='mb-2 flex items-center justify-between'>
+                                            <span className='text-sm font-medium text-gray-900 dark:text-white'>Font size</span>
+                                            <div className='flex items-center'>
+                                                <Button
+                                                    className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-grey-900 dark:hover:bg-grey-925 ${currentFontSizeIndex === 0 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
+                                                    disabled={currentFontSizeIndex === 0}
+                                                    hideLabel={true}
+                                                    icon='substract'
+                                                    iconSize='xs'
+                                                    label='Decrease font size'
+                                                    unstyled={true}
+                                                    onClick={decreaseFontSize}
+                                                />
+                                                <Button
+                                                    className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-gray-100 dark:bg-grey-900 dark:hover:bg-grey-925 ${currentFontSizeIndex === FONT_SIZES.length - 1 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
+                                                    disabled={currentFontSizeIndex === FONT_SIZES.length - 1}
+                                                    hideLabel={true}
+                                                    icon='add'
+                                                    iconSize='xs'
+                                                    label='Increase font size'
+                                                    unstyled={true}
+                                                    onClick={increaseFontSize}
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className='mb-5 flex items-center justify-between'>
-                                        <span className='text-sm font-medium text-gray-900'>Line spacing</span>
-                                        <div className='flex items-center'>
-                                            <Button
-                                                className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-gray-100 ${currentLineHeightIndex === 0 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
-                                                disabled={currentLineHeightIndex === 0}
-                                                hideLabel={true}
-                                                icon='substract'
-                                                iconSize='xs'
-                                                label='Decrease line spacing'
-                                                unstyled={true}
-                                                onClick={decreaseLineHeight}
-                                            />
-                                            <Button
-                                                className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-gray-100 ${currentLineHeightIndex === LINE_HEIGHTS.length - 1 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
-                                                disabled={currentLineHeightIndex === LINE_HEIGHTS.length - 1}
-                                                hideLabel={true}
-                                                icon='add'
-                                                iconSize='xs'
-                                                label='Increase line spacing'
-                                                unstyled={true}
-                                                onClick={increaseLineHeight}
-                                            />
+                                        <div className='mb-5 flex items-center justify-between'>
+                                            <span className='text-sm font-medium text-gray-900 dark:text-white'>Line spacing</span>
+                                            <div className='flex items-center'>
+                                                <Button
+                                                    className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-gray-100 dark:bg-grey-900 dark:hover:bg-grey-925 ${currentLineHeightIndex === 0 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
+                                                    disabled={currentLineHeightIndex === 0}
+                                                    hideLabel={true}
+                                                    icon='substract'
+                                                    iconSize='xs'
+                                                    label='Decrease line spacing'
+                                                    unstyled={true}
+                                                    onClick={decreaseLineHeight}
+                                                />
+                                                <Button
+                                                    className={`transition-color flex h-8 w-8 items-center justify-center rounded-full bg-white hover:bg-gray-100 dark:bg-grey-900 dark:hover:bg-grey-925 ${currentLineHeightIndex === LINE_HEIGHTS.length - 1 ? 'opacity-20 hover:bg-white' : 'hover:bg-gray-100'}`}
+                                                    disabled={currentLineHeightIndex === LINE_HEIGHTS.length - 1}
+                                                    hideLabel={true}
+                                                    icon='add'
+                                                    iconSize='xs'
+                                                    label='Increase line spacing'
+                                                    unstyled={true}
+                                                    onClick={increaseLineHeight}
+                                                />
+                                            </div>
                                         </div>
+                                        <Button
+                                            className="text-sm text-gray-600 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-600"
+                                            label="Reset to default"
+                                            link={true}
+                                            onClick={() => {
+                                                setCurrentFontSizeIndex(1); // Default font size
+                                                setCurrentLineHeightIndex(1); // Default line height
+                                                setFontFamily({
+                                                    value: FONT_SANS,
+                                                    label: 'Clean sans-serif'
+                                                });
+                                            }}
+                                        />
                                     </div>
-                                    <Button
-                                        className="text-sm text-gray-600 hover:text-gray-700"
-                                        label="Reset to default"
-                                        link={true}
-                                        onClick={() => {
-                                            setCurrentFontSizeIndex(1); // Default font size
-                                            setCurrentLineHeightIndex(1); // Default line height
-                                            setFontFamily({
-                                                value: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif',
-                                                label: 'Clean sans-serif'
-                                            });
-                                        }}
-                                    />
-                                </div>
+                                </PopoverContent>
                             </Popover>}
-                            <Button className='transition-color flex h-10 w-10 items-center justify-center rounded-full bg-white hover:bg-gray-100' icon='close' size='sm' unstyled onClick={() => modal.remove()}/>
+                            <Button className='transition-color flex h-10 w-10 items-center justify-center rounded-full bg-white hover:bg-gray-100 dark:bg-black dark:hover:bg-gray-950' icon='close' size='sm' unstyled onClick={() => modal.remove()}/>
                         </div>
                     </div>
                 </div>
                 <div className='relative flex-1'>
-                    {modalSize === MODAL_SIZE_LG && object.type === 'Article' && tocItems.length > 0 && (
+                    {modalSize === MODAL_SIZE_LG && object.type === 'Article' && tocItems.length > 1 && (
                         <div className="!visible absolute inset-y-0 right-7 z-40 hidden lg:!block">
                             <div className="sticky top-1/2 -translate-y-1/2">
                                 <TableOfContents
@@ -837,7 +853,7 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
                     )}
                     <div className='grow overflow-y-auto'>
                         <div className={`mx-auto px-8 pb-10 pt-5`} style={{maxWidth: currentMaxWidth}}>
-                            {activityThreadParents.map((item) => {
+                            {threadParents.map((item) => {
                                 return (
                                     <>
                                         <FeedItem
@@ -867,7 +883,7 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
                                     layout={'modal'}
                                     object={object}
                                     repostCount={object.repostCount ?? 0}
-                                    showHeader={(canNavigateBack || (activityThreadParents.length > 0))}
+                                    showHeader={(canNavigateBack || (threadParents.length > 0))}
                                     type='Note'
                                     onCommentClick={() => {
                                         repliesRef.current?.scrollIntoView({
@@ -878,7 +894,7 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
                                 />
                             )}
                             {object.type === 'Article' && (
-                                <div className='border-b border-gray-200 pb-8' id='object-content'>
+                                <div className='border-b border-gray-200 pb-8 dark:border-gray-950' id='object-content'>
                                     <ArticleBody
                                         excerpt={object?.preview?.content ?? ''}
                                         fontFamily={fontFamily}
@@ -922,8 +938,8 @@ const ArticleModal: React.FC<ArticleModalProps> = ({
                             {isLoadingThread && <LoadingIndicator size='lg' />}
 
                             <div ref={repliesRef}>
-                                {activityThreadChildren.map((item, index) => {
-                                    const showDivider = index !== activityThreadChildren.length - 1;
+                                {threadChildren.map((item, index) => {
+                                    const showDivider = index !== threadChildren.length - 1;
 
                                     return (
                                         <React.Fragment key={item.id}>
